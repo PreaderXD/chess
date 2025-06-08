@@ -141,6 +141,7 @@
                     boardDiv.appendChild(square);
                 }
             }
+            console.log("Board initialized");
         }
 
         // Handle login
@@ -149,6 +150,7 @@
             signInWithPopup(auth, provider)
                 .then((result) => {
                     playerName = result.user.displayName;
+                    console.log("Logged in as:", playerName);
                     document.getElementById("login-container").style.display = "none";
                     document.getElementById("game-container").style.display = "block";
                     startGame();
@@ -177,6 +179,7 @@
                 movesHistory: []
             });
 
+            console.log("New game created with ID:", gameId);
             return gameId;
         }
 
@@ -239,7 +242,7 @@
         // Make a move in the game
         function makeMove(fromRow, fromCol, toRow, toCol) {
             const gameRef = ref(database, "games/" + gameId);
-            get(gameRef).then((snapshot) => {
+            gameRef.once("value", (snapshot) => {
                 const gameData = snapshot.val();
                 if (gameData) {
                     const boardState = gameData.boardState;
@@ -250,14 +253,12 @@
 
                     update(gameRef, {
                         boardState: boardState,
-                        currentPlayer: gameData.currentPlayer === "white" ? "black" : "white"
+                        currentPlayer: gameData.currentPlayer === "white" ? "black" : "white",
+                        movesHistory: [...gameData.movesHistory, `${piece} from ${fromRow},${fromCol} to ${toRow},${toCol}`],
                     });
                 }
             });
         }
-
-        // Initialize the board when the page loads
-        window.onload = initializeBoard;
     </script>
 </body>
 </html>
