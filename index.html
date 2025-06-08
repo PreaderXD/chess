@@ -84,30 +84,30 @@
     </div>
 
     <!-- Firebase JS SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.9.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js"></script>
 
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-database.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js";
 
-
-
-
-    <script>
-        // Firebase config
+        // Firebase configuration
         const firebaseConfig = {
-  apiKey: "AIzaSyAiLcMdhdrXHQTv6NA8G1O28xKqi2PxQes",
-  authDomain: "chess-5d5cd.firebaseapp.com",
-  projectId: "chess-5d5cd",
-  storageBucket: "chess-5d5cd.firebasestorage.app",
-  messagingSenderId: "76245448485",
-  appId: "1:76245448485:web:0955d7941fc81ae6254ccc",
-  measurementId: "G-0EQ73HWZV7"
-};
+            apiKey: "AIzaSyAiLcMdhdrXHQTv6NA8G1O28xKqi2PxQes",
+            authDomain: "chess-5d5cd.firebaseapp.com",
+            projectId: "chess-5d5cd",
+            storageBucket: "chess-5d5cd.firebasestorage.app",
+            messagingSenderId: "76245448485",
+            appId: "1:76245448485:web:0955d7941fc81ae6254ccc",
+            measurementId: "G-0EQ73HWZV7"
+        };
 
         // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const database = firebase.database();
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const database = getDatabase(app);
 
         let playerName = '';
         let gameId = '';
@@ -145,8 +145,8 @@
 
         // Handle login
         document.getElementById("login-btn").addEventListener("click", () => {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider)
+            const provider = new GoogleAuthProvider();
+            signInWithPopup(auth, provider)
                 .then((result) => {
                     playerName = result.user.displayName;
                     document.getElementById("login-container").style.display = "none";
@@ -166,10 +166,10 @@
 
         // Create a new game in Firebase
         function createNewGame(playerName) {
-            const gameRef = database.ref("games").push();
+            const gameRef = ref(database, 'games').push();
             const gameId = gameRef.key;
 
-            gameRef.set({
+            set(gameRef, {
                 whitePlayer: playerName,
                 blackPlayer: "",
                 currentPlayer: "white",
@@ -182,17 +182,17 @@
 
         // Join an existing game
         function joinGame(gameId, playerName) {
-            const gameRef = database.ref("games/" + gameId);
-            gameRef.update({
+            const gameRef = ref(database, "games/" + gameId);
+            update(gameRef, {
                 blackPlayer: playerName
             });
         }
 
         // Listen to game state changes
         function listenToGame(gameId) {
-            const gameRef = database.ref("games/" + gameId);
+            const gameRef = ref(database, "games/" + gameId);
 
-            gameRef.on("value", (snapshot) => {
+            onValue(gameRef, (snapshot) => {
                 const gameData = snapshot.val();
                 if (gameData) {
                     updateBoard(gameData.boardState);
@@ -238,8 +238,8 @@
 
         // Make a move in the game
         function makeMove(fromRow, fromCol, toRow, toCol) {
-            const gameRef = database.ref("games/" + gameId);
-            gameRef.once("value", (snapshot) => {
+            const gameRef = ref(database, "games/" + gameId);
+            get(gameRef).then((snapshot) => {
                 const gameData = snapshot.val();
                 if (gameData) {
                     const boardState = gameData.boardState;
@@ -248,14 +248,16 @@
                     boardState[toRow][toCol] = piece;
                     boardState[fromRow][fromCol] = "";
 
-                    gameRef.update({
+                    update(gameRef, {
                         boardState: boardState,
-                        currentPlayer: gameData.currentPlayer === "white" ? "black" : "white",
-                        movesHistory: [...gameData.movesHistory, `${piece} from ${fromRow},${fromCol} to ${toRow},${toCol}`],
+                        currentPlayer: gameData.currentPlayer === "white" ? "black" : "white"
                     });
                 }
             });
         }
+
+        // Initialize the board when the page loads
+        window.onload = initializeBoard;
     </script>
 </body>
 </html>
