@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Chess Game</title>
+    <style>
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #f0f0f0;
+        }
+
+        #chessboard {
+            width: 480px;
+            height: 480px;
+            display: flex;
+            flex-wrap: wrap;
+            margin: 20px auto;
+            border: 4px solid #333;
+        }
+
+        .square {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 36px;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        .light {
+            background-color: #f0d9b5;
+        }
+
+        .dark {
+            background-color: #b58863;
+        }
+
+        .selected {
+            outline: 3px solid red;
+        }
+
+        #promotion-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #promotion-options {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        #promotion-options p {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .promo-btn {
+            font-size: 24px;
+            margin: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            border: 1px solid #333;
+            background: #eee;
+            border-radius: 5px;
+            user-select: none;
+        }
+
+        .promo-btn:hover {
+            background: #ddd;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body>
+    <h1>Simple Chess Game</h1>
+    <div id="chessboard"></div>
+    <div id="promotion-modal" style="display:none;">
+        <div id="promotion-options">
+            <p>Promote to:</p>
+            <button class="promo-btn" data-piece="♕">Queen ♕</button>
+            <button class="promo-btn" data-piece="♖">Rook ♖</button>
+            <button class="promo-btn" data-piece="♗">Bishop ♗</button>
+            <button class="promo-btn" data-piece="♘">Knight ♘</button>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            const board = $('#chessboard');
+            let selected = null;
+            let currentPlayer = 'white';
+            let promotionPending = null; // {row, col, color} or null
+
+            const initialPosition = [
+                ['♜', '♞', '♝', '♛', '♚', '♝', '♞', '♜'],
+                ['♟', '♟', '♟', '♟', '♟', '♟', '♟', '♟'],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['♙', '♙', '♙', '♙', '♙', '♙', '♙', '♙'],
+                ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖'],
+            ];
+
+            function isWhite(piece) {
+                return ['♙', '♖', '♘', '♗', '♕', '♔'].includes(piece);
+            }
+
+            function isBlack(piece) {
+                return ['♟', '♜', '♞', '♝', '♛', '♚'].includes(piece);
+            }
+
+            function renderBoard() {
+                board.empty();
+                for (let row = 0; row < 8; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        const piece = initialPosition[row][col];
+                        const color = (row + col) % 2 === 0 ? 'light' : 'dark';
+
+                        const square = $('<div>')
+                            .addClass('square')
+                            .addClass(color)
+                            .attr('data-row', row)
+                            .attr('data-col', col)
+                            .html(piece);
+
+                        board.append(square);
+                    }
+                }
+            }
+
+            function cloneBoard() {
+                return initialPosition.map(row => row.slice());
+            }
+
+            function findKing(boardState, isWhiteKing) {
+                const king = isWhiteKing ? '♔' : '♚';
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        if (boardState[r][c] === king) return {
+                            r,
+                            c
+                        };
+                    }
+                }
+                return null;
+            }
+
+            function isValidMove(fromRow, fromCol, toRow, toCol, piece, boardState = initialPosition) {
+                const target = boardState[toRow][toCol];
+                const dr = toRow - fromRow;
+                const dc = toCol - fromCol;
+
+                if ((isWhite(piece) && isWhite(target)) || (isBlack(piece) && isBlack(target))) {
+                    return false;
+                }
+
+                switch (piece) {
+                    case '♙':
+                        if (dc === 0 && dr === -1 && target === '') return true;
+                        if (dc === 0 && dr === -2 && fromRow === 6 && boardState[5][fromCol] === '' && target === '') return true;
+                        if (Math.abs(dc) === 1 && dr === -1 && isBlack(target)) return true;
+                        break;
+                    case '♟':
+                        if (dc === 0 && dr === 1 && target === '') return true;
+                        if (dc === 0 && dr === 2 && fromRow === 1 && boardState[2][fromCol] === '' && target === '') return true;
+                        if (Math.abs(dc) === 1 && dr === 1 && isWhite(target)) return true;
+                        break;
+                    case '♘':
+                    case '♞':
+                        if ((Math.abs(dr) === 2 && Math.abs(dc) === 1) || (Math.abs(dr) === 1 && Math.abs(dc) === 2)) return true;
+                        break;
+                    case '♗':
+                    case '♝':
+                        if (Math.abs(dr) === Math.abs(dc)) return clearDiagonal(fromRow, fromCol, toRow, toCol, boardState);
+                        break;
+                    case '♖':
+                    case '♜':
+                        if (dr === 0 || dc === 0) return clearLine(fromRow, fromCol, toRow, toCol, boardState);
+                        break;
+                    case '♕':
+                    case '♛':
+                        if (dr === 0 || dc === 0) return clearLine(fromRow, fromCol, toRow, toCol, boardState);
+                        if (Math.abs(dr) === Math.abs(dc)) return clearDiagonal(fromRow, fromCol, toRow, toCol, boardState);
+                        break;
+                    case '♔':
+                    case '♚':
+                        if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1) return true;
+                        break;
+                }
+                return false;
+            }
+
+            function clearLine(r1, c1, r2, c2, boardState) {
+                const dr = Math.sign(r2 - r1);
+                const dc = Math.sign(c2 - c1);
+                let r = r1 + dr,
+                    c = c1 + dc;
+                while (r !== r2 || c !== c2) {
+                    if (boardState[r][c] !== '') return false;
+                    r += dr;
+                    c += dc;
+                }
+                return true;
+            }
+
+            function clearDiagonal(r1, c1, r2, c2, boardState) {
+                const dr = Math.sign(r2 - r1);
+                const dc = Math.sign(c2 - c1);
+                let r = r1 + dr,
+                    c = c1 + dc;
+                while (r !== r2 && c !== c2) {
+                    if (boardState[r][c] !== '') return false;
+                    r += dr;
+                    c += dc;
+                }
+                return true;
+            }
+
+            function isInCheck(boardState, player) {
+                const kingPos = findKing(boardState, player === 'white');
+                if (!kingPos) return false;
+
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const piece = boardState[r][c];
+                        if ((player === 'white' && isBlack(piece)) || (player === 'black' && isWhite(piece))) {
+                            if (isValidMove(r, c, kingPos.r, kingPos.c, piece, boardState)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            function hasLegalMoves(player) {
+                for (let r1 = 0; r1 < 8; r1++) {
+                    for (let c1 = 0; c1 < 8; c1++) {
+                        const piece = initialPosition[r1][c1];
+                        if ((player === 'white' && isWhite(piece)) || (player === 'black' && isBlack(piece))) {
+                            for (let r2 = 0; r2 < 8; r2++) {
+                                for (let c2 = 0; c2 < 8; c2++) {
+                                    if (isValidMove(r1, c1, r2, c2, piece)) {
+                                        const clone = cloneBoard();
+                                        clone[r2][c2] = piece;
+                                        clone[r1][c1] = '';
+                                        if (!isInCheck(clone, player)) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            function showPromotionModal(row, col, color) {
+                promotionPending = {
+                    row,
+                    col,
+                    color
+                };
+                $('#promotion-modal').show();
+            }
+
+            function hidePromotionModal() {
+                promotionPending = null;
+                $('#promotion-modal').hide();
+            }
+
+            function triggerPromotion(row, col, color) {
+                showPromotionModal(row, col, color);
+            }
+
+            $(document).on('click', '.promo-btn', function() {
+                if (!promotionPending) return;
+
+                const piece = $(this).data('piece');
+                initialPosition[promotionPending.row][promotionPending.col] = piece;
+                hidePromotionModal();
+                renderBoard();
+            });
+
+            $(document).on('click', '.square', function() {
+                if (promotionPending) return; // block moves while promoting
+
+                const row = parseInt($(this).data('row'));
+                const col = parseInt($(this).data('col'));
+                const piece = initialPosition[row][col];
+
+                if (selected) {
+                    const fromRow = selected.row;
+                    const fromCol = selected.col;
+                    const fromPiece = initialPosition[fromRow][fromCol];
+
+                    if (isValidMove(fromRow, fromCol, row, col, fromPiece)) {
+                        const backup = cloneBoard();
+                        initialPosition[row][col] = fromPiece;
+                        initialPosition[fromRow][fromCol] = '';
+
+                        if (isInCheck(initialPosition, currentPlayer)) {
+                            // Illegal move, king would be in check
+                            initialPosition[fromRow][fromCol] = fromPiece;
+                            initialPosition[row][col] = backup[row][col];
+                            alert("Illegal move: you cannot put or leave your king in check.");
+                        } else {
+                            // Check for pawn promotion
+                            if (fromPiece === '♙' && row === 0) {
+                                triggerPromotion(row, col, 'white');
+                            } else if (fromPiece === '♟' && row === 7) {
+                                triggerPromotion(row, col, 'black');
+                            } else {
+                                currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+
+                                if (isInCheck(initialPosition, currentPlayer)) {
+                                    if (!hasLegalMoves(currentPlayer)) {
+                                        alert("Checkmate! " + (currentPlayer === 'white' ? 'Black' : 'White') + " wins!");
+                                    } else {
+                                        alert(currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1) + " is in check!");
+                                    }
+                                } else if (!hasLegalMoves(currentPlayer)) {
+                                    alert("Stalemate!");
+                                }
+                            }
+                        }
+                        selected = null;
+                        $('.square').removeClass('selected');
+                        renderBoard();
+                    } else {
+                        selected = null;
+                        $('.square').removeClass('selected');
+                    }
+                } else {
+                    if ((currentPlayer === 'white' && isWhite(piece)) ||
+                        (currentPlayer === 'black' && isBlack(piece))) {
+                        selected = {
+                            row,
+                            col
+                        };
+                        $('.square').removeClass('selected');
+                        $(this).addClass('selected');
+                    }
+                }
+            });
+
+            renderBoard();
+        });
+    </script>
+</body>
+
+</html>
