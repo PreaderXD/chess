@@ -1,23 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <title>Enhanced Chess Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Chess</title>
     <style>
+        /* Basic styles for the chessboard */
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            background: #f0f0f0;
         }
 
-        #chessboard {
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            margin: 20px auto;
+            border: 2px solid #000;
             width: 480px;
             height: 480px;
-            display: flex;
-            flex-wrap: wrap;
-            margin: 20px auto;
-            border: 4px solid #333;
         }
 
         .square {
@@ -26,206 +27,235 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 36px;
             cursor: pointer;
-            box-sizing: border-box;
-            user-select: none;
         }
 
-        .light {
+        .square:nth-child(odd) {
             background-color: #f0d9b5;
         }
 
-        .dark {
+        .square:nth-child(even) {
             background-color: #b58863;
         }
 
         .selected {
-            outline: 3px solid red;
+            background-color: #f00;
         }
 
-        .highlight {
-            background-color: rgba(255, 255, 0, 0.5);
+        .player-info {
+            margin-top: 20px;
         }
 
-        .undo-btn, .game-history-btn {
-            margin: 20px;
-            padding: 10px 20px;
-            background-color: #2f80ed;
-            color: white;
-            border: none;
-            font-size: 16px;
+        .turn-indicator {
+            font-weight: bold;
+        }
+
+        .promo-btns {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .promo-btn {
+            padding: 10px;
             cursor: pointer;
         }
-
-        .undo-btn:hover, .game-history-btn:hover {
-            background-color: #1f69b0;
-        }
-
-        #game-history {
-            margin-top: 20px;
-            list-style-type: none;
-            padding: 0;
-        }
-
-        #game-history li {
-            padding: 5px;
-            background-color: #fff;
-            margin: 5px 0;
-            border-radius: 5px;
-        }
-
     </style>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
-
 <body>
-    <h1>Enhanced Chess Game</h1>
-    <button class="undo-btn">Undo Last Move</button>
-    <button class="game-history-btn">Game History</button>
-    <div id="chessboard"></div>
-    <ul id="game-history"></ul>
+
+    <div id="login-container">
+        <button id="login-btn">Login with Google</button>
+    </div>
+
+    <div id="game-container" style="display: none;">
+        <div id="board"></div>
+        <div class="player-info">
+            <div id="turn-indicator">White's Turn</div>
+        </div>
+        <div id="promo-container" style="display: none;">
+            <div class="promo-btns">
+                <button class="promo-btn" id="promote-queen">Queen</button>
+                <button class="promo-btn" id="promote-knight">Knight</button>
+                <button class="promo-btn" id="promote-rook">Rook</button>
+                <button class="promo-btn" id="promote-bishop">Bishop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase JS SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+
+
+
+
 
     <script>
-        $(document).ready(function() {
-            const board = $('#chessboard');
-            const gameHistory = $('#game-history');
-            let selected = null;
-            let currentPlayer = 'white';
-            let promotionPending = null;
-            let moveHistory = []; // Stores the history of moves (board states)
-            let initialPosition = [
-                ['♜', '♞', '♝', '♛', '♚', '♝', '♞', '♜'],
-                ['♟', '♟', '♟', '♟', '♟', '♟', '♟', '♟'],
-                ['', '', '', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', ''],
-                ['', '', '', '', '', '', '', ''],
-                ['♙', '♙', '♙', '♙', '♙', '♙', '♙', '♙'],
-                ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖'],
-            ];
+        // Firebase config
+        const firebaseConfig = {
+  apiKey: "AIzaSyAiLcMdhdrXHQTv6NA8G1O28xKqi2PxQes",
+  authDomain: "chess-5d5cd.firebaseapp.com",
+  projectId: "chess-5d5cd",
+  storageBucket: "chess-5d5cd.firebasestorage.app",
+  messagingSenderId: "76245448485",
+  appId: "1:76245448485:web:0955d7941fc81ae6254ccc",
+  measurementId: "G-0EQ73HWZV7"
+};
 
-            // Function to render the chessboard
-            function renderBoard() {
-                board.empty();
-                for (let row = 0; row < 8; row++) {
-                    for (let col = 0; col < 8; col++) {
-                        const piece = initialPosition[row][col];
-                        const color = (row + col) % 2 === 0 ? 'light' : 'dark';
-                        const square = $('<div>')
-                            .addClass('square')
-                            .addClass(color)
-                            .attr('data-row', row)
-                            .attr('data-col', col)
-                            .html(piece)
-                            .attr('draggable', true);
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
 
-                        square.on('dragstart', handleDragStart);
-                        square.on('dragover', handleDragOver);
-                        square.on('drop', handleDrop);
+        let playerName = '';
+        let gameId = '';
+        let selectedPiece = null;
 
-                        board.append(square);
-                    }
+        // Board and piece representation
+        const initialBoard = [
+            ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖'],
+            ['♙', '♙', '♙', '♙', '♙', '♙', '♙', '♙'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['♟', '♟', '♟', '♟', '♟', '♟', '♟', '♟'],
+            ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖']
+        ];
+
+        // Initialize game UI
+        function initializeBoard() {
+            const boardDiv = document.getElementById("board");
+            boardDiv.innerHTML = '';
+
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.classList.add('square');
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+                    square.innerHTML = initialBoard[row][col];
+                    square.addEventListener('click', onSquareClick);
+                    boardDiv.appendChild(square);
                 }
             }
+        }
 
-            // Save the current board state in the history
-            function saveMoveState() {
-                const boardState = initialPosition.map(row => row.slice());
-                moveHistory.push(boardState);
-                renderHistory();
-            }
-
-            // Undo the last move
-            function undoMove() {
-                if (moveHistory.length > 0) {
-                    initialPosition = moveHistory.pop();
-                    renderBoard();
-                    currentPlayer = currentPlayer === 'white' ? 'black' : 'white'; // Revert the turn
-                }
-            }
-
-            // Render the move history
-            function renderHistory() {
-                gameHistory.empty();
-                moveHistory.forEach((state, index) => {
-                    const move = `Move ${index + 1}: ${JSON.stringify(state)}`;
-                    gameHistory.append(`<li>${move}</li>`);
+        // Handle login
+        document.getElementById("login-btn").addEventListener("click", () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    playerName = result.user.displayName;
+                    document.getElementById("login-container").style.display = "none";
+                    document.getElementById("game-container").style.display = "block";
+                    startGame();
+                })
+                .catch((error) => {
+                    console.error("Error during login:", error);
                 });
-            }
-
-            // Highlight legal moves for the selected piece
-            function highlightLegalMoves(row, col, piece) {
-                const legalMoves = getLegalMoves(row, col, piece);
-                $('.square').removeClass('highlight');
-                legalMoves.forEach(move => {
-                    const targetSquare = $(`.square[data-row="${move.row}"][data-col="${move.col}"]`);
-                    targetSquare.addClass('highlight');
-                });
-            }
-
-            // Get legal moves for a piece at a given position
-            function getLegalMoves(row, col, piece) {
-                let legalMoves = [];
-                for (let r = 0; r < 8; r++) {
-                    for (let c = 0; c < 8; c++) {
-                        if (isValidMove(row, col, r, c, piece)) {
-                            legalMoves.push({ row: r, col: c });
-                        }
-                    }
-                }
-                return legalMoves;
-            }
-
-            // Check if a move is valid (simplified version for demo)
-            function isValidMove(fromRow, fromCol, toRow, toCol, piece) {
-                return fromRow !== toRow || fromCol !== toCol; // A move is valid if it's not the same square
-            }
-
-            // Handle drag start event
-            function handleDragStart(event) {
-                const piece = $(this).html();
-                event.originalEvent.dataTransfer.setData('piece', piece);
-                selected = { row: $(this).data('row'), col: $(this).data('col') };
-                $(this).addClass('selected');
-            }
-
-            // Handle drag over event
-            function handleDragOver(event) {
-                event.preventDefault(); // Allow dropping
-            }
-
-            // Handle drop event
-            function handleDrop(event) {
-                const piece = event.originalEvent.dataTransfer.getData('piece');
-                const row = $(this).data('row');
-                const col = $(this).data('col');
-
-                if (isValidMove(selected.row, selected.col, row, col, piece)) {
-                    initialPosition[row][col] = piece;
-                    initialPosition[selected.row][selected.col] = ''; // Remove the piece from the original square
-                    saveMoveState();
-                    renderBoard();
-                    currentPlayer = currentPlayer === 'white' ? 'black' : 'white'; // Switch turn
-                    renderHistory(); // Update the game history
-                }
-
-                $(this).removeClass('highlight'); // Remove highlight
-            }
-
-            // Event listener for undo button
-            $('.undo-btn').on('click', function() {
-                undoMove();
-            });
-
-            // Event listener for game history button
-            $('.game-history-btn').on('click', function() {
-                $('#game-history').toggle(); // Show or hide the game history
-            });
-
-            renderBoard();
         });
+
+        // Start a new game
+        function startGame() {
+            gameId = createNewGame(playerName);
+            listenToGame(gameId);
+        }
+
+        // Create a new game in Firebase
+        function createNewGame(playerName) {
+            const gameRef = database.ref("games").push();
+            const gameId = gameRef.key;
+
+            gameRef.set({
+                whitePlayer: playerName,
+                blackPlayer: "",
+                currentPlayer: "white",
+                boardState: initialBoard,
+                movesHistory: []
+            });
+
+            return gameId;
+        }
+
+        // Join an existing game
+        function joinGame(gameId, playerName) {
+            const gameRef = database.ref("games/" + gameId);
+            gameRef.update({
+                blackPlayer: playerName
+            });
+        }
+
+        // Listen to game state changes
+        function listenToGame(gameId) {
+            const gameRef = database.ref("games/" + gameId);
+
+            gameRef.on("value", (snapshot) => {
+                const gameData = snapshot.val();
+                if (gameData) {
+                    updateBoard(gameData.boardState);
+                    updateGameInfo(gameData);
+                }
+            });
+        }
+
+        // Update board based on game state
+        function updateBoard(boardState) {
+            const boardDiv = document.getElementById("board");
+            const squares = boardDiv.getElementsByClassName('square');
+
+            let index = 0;
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    squares[index].innerHTML = boardState[row][col];
+                    index++;
+                }
+            }
+        }
+
+        // Update turn indicator and other game info
+        function updateGameInfo(gameData) {
+            const currentPlayer = gameData.currentPlayer;
+            document.getElementById("turn-indicator").innerText = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}'s Turn`;
+        }
+
+        // Handle square click (select piece or move)
+        function onSquareClick(event) {
+            const square = event.target;
+            const row = parseInt(square.dataset.row);
+            const col = parseInt(square.dataset.col);
+
+            if (selectedPiece) {
+                makeMove(selectedPiece.row, selectedPiece.col, row, col);
+                selectedPiece = null;
+            } else {
+                selectedPiece = { row, col };
+                square.classList.add("selected");
+            }
+        }
+
+        // Make a move in the game
+        function makeMove(fromRow, fromCol, toRow, toCol) {
+            const gameRef = database.ref("games/" + gameId);
+            gameRef.once("value", (snapshot) => {
+                const gameData = snapshot.val();
+                if (gameData) {
+                    const boardState = gameData.boardState;
+                    const piece = boardState[fromRow][fromCol];
+
+                    boardState[toRow][toCol] = piece;
+                    boardState[fromRow][fromCol] = "";
+
+                    gameRef.update({
+                        boardState: boardState,
+                        currentPlayer: gameData.currentPlayer === "white" ? "black" : "white",
+                        movesHistory: [...gameData.movesHistory, `${piece} from ${fromRow},${fromCol} to ${toRow},${toCol}`],
+                    });
+                }
+            });
+        }
     </script>
 </body>
-
 </html>
