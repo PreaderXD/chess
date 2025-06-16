@@ -2,25 +2,12 @@
 
 This is an interactive chess game that includes several enhanced features for a better user experience:
 
-### Features Added:
-- **Undo Move**: 
-  - Easily revert your last move to correct mistakes or rethink your strategy. Just click the "Undo Last Move" button to go back to the previous board state.
-  
-- **Game History**:
-  - A move history panel that shows all moves made during the game. You can access it by clicking the "Game History" button.
-  
-- **Legal Moves Highlighting**:
-  - When you select a piece, all the valid squares it can move to are highlighted, making it easier to plan your moves.
-  
-- **Drag and Drop**:
-  - A more intuitive way to move pieces on the board. Simply drag a piece and drop it on a valid destination square.
-
 ### How to Use:
 1. **Start a New Game**:
    - The game initializes with the standard chessboard setup.
 
 2. **Make a Move**:
-   - You can either **click** a piece and then click on a destination square to move it, or **drag** the piece and drop it on a valid square.
+   - You can **click** a piece and then click on a destination square to move iton a valid square.
 
 3. **Undo a Move**:
    - To undo your last move, simply click the **Undo Last Move** button.
